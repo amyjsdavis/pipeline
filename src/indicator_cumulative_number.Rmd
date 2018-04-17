@@ -201,3 +201,60 @@ x_scale_stepsize <- 25
 indicator_total_year(data, start_year_plot, x_scale_stepsize, 
                      facet_column = "kingdom")
 ```
+
+```{r}
+df_cleaned <- data %>%
+    distinct_("key", "startDate", "endDate") %>%
+    filter(!is.na(startDate)) %>%  # ignore information without startDate
+    mutate(endDate = if_else(is.na(endDate), startDate, endDate)) # replace NA with startDate
+
+introduction_count <- df_cleaned %>% 
+        group_by(.data$startDate) %>%
+        count() %>%
+        ungroup() %>%
+        rename(year = startDate,
+               n_introduced = n)
+
+df_extended <- df_cleaned %>%
+    rowwise() %>%
+    do(year = .data$startDate:.data$endDate) %>%
+    bind_cols(df_cleaned) %>% 
+    unnest(year)
+
+totals <- df_extended %>% 
+    group_by(year) %>% 
+    count() %>%
+    ungroup() %>%
+    rename(n_defined = n)
+```
+
+```{r}
+start_year_plot <- 1900
+plot_info <- left_join(totals, introduction_count, 
+                       by = "year") %>%
+    replace_na(list(n_introduced = 0)) %>%
+    mutate(cum_n_introduced = cumsum(n_introduced))
+
+maxDate <- max(df_extended$year)
+plot <- ggplot(plot_info, aes(x = year)) +
+    geom_line(mapping = aes(y = n_defined, 
+                            color = "described alien species"), 
+              label = "described alien species") +
+    geom_line(mapping = aes(y = cum_n_introduced, 
+                            color = "cumulative number of introductions"), 
+              label = "cumulative number of introductions") +
+    geom_ribbon(aes(ymin = n_defined, ymax = cum_n_introduced), 
+                fill = "grey", alpha = "0.5") +
+    xlab("Year") +
+    ylab("Number of alien species") +
+    scale_x_continuous(breaks = seq(start_year_plot, maxDate, 
+                            x_scale_stepsize),
+                   limits = c(start_year_plot, maxDate)) +
+    theme_inbo()
+
+plot
+
+```
+
+
+
